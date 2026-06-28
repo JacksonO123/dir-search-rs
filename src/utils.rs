@@ -1,4 +1,3 @@
-use crate::ParseConfig;
 use std::{collections::HashMap, hash::Hash, string};
 
 pub fn byte_slice_to_string(slice: &[u8]) -> Result<String, string::FromUtf8Error> {
