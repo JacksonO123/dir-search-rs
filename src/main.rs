@@ -1,6 +1,4 @@
-use std::{collections::HashMap, error, fmt, fs, path, string};
-
-use crate::utils::exists_as_val_in_map;
+use std::{collections::HashMap, error, fmt, fs, io::Write, path, string};
 mod utils;
 
 macro_rules! const_to_macro {
@@ -15,24 +13,12 @@ macro_rules! const_to_macro {
     };
 }
 
-const_to_macro!(SEARCH_DIR, &'static str, search_dir_m, "search_dir");
+const_to_macro!(SEARCH_DIR, &'static str, _search_dir_m, "search_dir");
 const_to_macro!(
     SEARCH_CONTENTS,
     &'static str,
     search_contents_m,
     "search_contents"
-);
-const_to_macro!(
-    CASE_SENSITIVE,
-    &'static str,
-    case_sensitive_m,
-    "case_sensitive"
-);
-const_to_macro!(
-    START_OF_LINE,
-    &'static str,
-    start_of_line_m,
-    "start_of_line"
 );
 const_to_macro!(
     SEARCH_STR_INSERT,
@@ -47,8 +33,6 @@ enum ConfigParseError {
     ExpectedEqDelimiter,
     UnexpectedSearchContentsValue,
     MissingConfigArg,
-    UnexpectedCaseSensitiveValue,
-    UnexpectedStartOfLineValue,
     SearchStringDoesNotHaveSearchInsert,
 }
 
@@ -60,12 +44,6 @@ impl fmt::Display for ConfigParseError {
                 concat!("unexpected ", search_contents_m!(), " value")
             }
             Self::MissingConfigArg => "missing config file path",
-            Self::UnexpectedCaseSensitiveValue => {
-                concat!("unexpected ", case_sensitive_m!(), " value")
-            }
-            Self::UnexpectedStartOfLineValue => {
-                concat!("unexpected ", start_of_line_m!(), " value")
-            }
             Self::SearchStringDoesNotHaveSearchInsert => {
                 concat!(
                     search_str_m!(),
@@ -129,8 +107,6 @@ struct ParseConfig {
     search_dir: String,
     search_str: String,
     search_contents: SearchContents,
-    case_sensitive: bool,
-    start_of_line: bool,
 }
 
 enum SearchContents {
@@ -139,13 +115,28 @@ enum SearchContents {
 }
 
 fn main() {
-    if let Err(e) = run_proc() {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
+    match run_proc() {
+        Ok(res) => {
+            let null_byte: &[u8] = &[0];
+
+            for item in res {
+                let mut stdout = std::io::stdout();
+                let item = match item.to_str() {
+                    Some(value) => value,
+                    None => continue,
+                };
+                _ = stdout.write_all(item.as_bytes());
+                _ = stdout.write(&null_byte);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
     }
 }
 
-fn run_proc() -> Result<(), Box<dyn std::error::Error>> {
+fn run_proc() -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut config_file: Option<String> = None;
@@ -167,11 +158,7 @@ fn run_proc() -> Result<(), Box<dyn std::error::Error>> {
     let config_contents = fs::read(config_file.expect("Expected config file path"))?;
     let config = load_config(config_contents)?;
 
-    let res = search_with_config(&config, search_str)?;
-
-    println!("{:?}", res);
-
-    Ok(())
+    Ok(search_with_config(&config, search_str)?)
 }
 
 fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, LoadConfigError> {
@@ -232,20 +219,6 @@ fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, LoadConfigError>
         }
     };
 
-    let case_sensitive = exists_as_val_in_map::<String, String, LoadConfigError>(
-        &temp_map,
-        CASE_SENSITIVE.to_string(),
-        "true".to_string(),
-        ConfigParseError::UnexpectedCaseSensitiveValue.into(),
-    )?;
-
-    let start_of_line = exists_as_val_in_map::<String, String, LoadConfigError>(
-        &temp_map,
-        START_OF_LINE.to_string(),
-        "true".to_string(),
-        ConfigParseError::UnexpectedStartOfLineValue.into(),
-    )?;
-
     let search_str = match temp_map.get(SEARCH_STR) {
         Some(value) => {
             if !value.contains(SEARCH_STR_INSERT) {
@@ -261,8 +234,6 @@ fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, LoadConfigError>
         search_dir: search_dir.clone(),
         search_str: search_str.to_owned(),
         search_contents,
-        case_sensitive,
-        start_of_line,
     };
 
     Ok(parse_config)
