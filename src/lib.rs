@@ -1,18 +1,17 @@
-use std::{fs, io::Write, path};
-
-use crate::utils::ParseConfig;
 mod lib_error;
 mod utils;
 
+use std::{io::Write, path};
+
 pub fn search_with_config(
-    config: &ParseConfig,
+    config: &utils::ParseConfig,
     search_pattern: &String,
 ) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
     utils::search_with_config(config, search_pattern)
 }
 
 pub fn search_from_args(search_pattern: &String) {
-    match run_search_from_args(search_pattern) {
+    match utils::run_search_from_args(search_pattern) {
         Ok(res) => {
             let null_byte: &[u8] = &[0];
 
@@ -33,35 +32,9 @@ pub fn search_from_args(search_pattern: &String) {
     }
 }
 
-fn run_search_from_args(
-    search_pattern: &String,
-) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
-
-    let mut config_file: Option<String> = None;
-
-    for (i, arg) in args.iter().enumerate() {
-        if arg == "-c" {
-            if args.len() <= i + 1 {
-                return Err(Box::<lib_error::LoadConfigError>::new(
-                    lib_error::ConfigParseError::MissingConfigArg.into(),
-                ));
-            }
-
-            let after = args[i + 1].clone();
-            config_file = Some(after);
-        }
-    }
-
-    let config_contents = fs::read(config_file.expect("Expected config file path"))?;
-    let config = utils::load_config(config_contents)?;
-
-    Ok(utils::search_with_config(&config, search_pattern)?)
-}
-
 #[test]
 fn test_search() -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = ParseConfig {
+    let mut config = utils::ParseConfig {
         search_dir: "data".to_string(),
         search_str: "{search}".to_string(),
         search_contents: utils::SearchContents::FileName,

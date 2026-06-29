@@ -162,3 +162,29 @@ pub fn search_with_config(
 
     Ok(res_paths)
 }
+
+pub fn run_search_from_args(
+    search_pattern: &String,
+) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+
+    let mut config_file: Option<String> = None;
+
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "-c" {
+            if args.len() <= i + 1 {
+                return Err(Box::<lib_error::LoadConfigError>::new(
+                    lib_error::ConfigParseError::MissingConfigArg.into(),
+                ));
+            }
+
+            let after = args[i + 1].clone();
+            config_file = Some(after);
+        }
+    }
+
+    let config_contents = fs::read(config_file.expect("Expected config file path"))?;
+    let config = load_config(config_contents)?;
+
+    Ok(search_with_config(&config, search_pattern)?)
+}
