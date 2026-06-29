@@ -33,12 +33,12 @@ pub mod config {
 }
 
 pub struct ParseConfig {
-    search_dir: String,
-    search_str: String,
-    search_contents: SearchContents,
+    pub search_dir: String,
+    pub search_str: String,
+    pub search_contents: SearchContents,
 }
 
-enum SearchContents {
+pub enum SearchContents {
     FileName,
     FileContents,
 }

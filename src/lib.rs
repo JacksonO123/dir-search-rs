@@ -58,3 +58,53 @@ fn run_search_from_args(
 
     Ok(utils::search_with_config(&config, search_pattern)?)
 }
+
+#[test]
+fn test_search() -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = ParseConfig {
+        search_dir: "data".to_string(),
+        search_str: "{search}".to_string(),
+        search_contents: utils::SearchContents::FileName,
+    };
+
+    fn path_buf_from_vec(vec: Vec<&str>) -> path::PathBuf {
+        let mut buf = path::PathBuf::new();
+        for item in vec {
+            buf.push(item);
+        }
+        buf
+    }
+
+    fn to_result(result_layout: Vec<Vec<&str>>) -> Vec<path::PathBuf> {
+        let mut res = vec![];
+
+        for path_layout in result_layout {
+            res.push(path_buf_from_vec(path_layout));
+        }
+
+        res
+    }
+
+    {
+        let res = search_with_config(&config, &"the".to_string())?;
+        let expected_res = to_result(vec![
+            vec!["data", "another-file2.txt"],
+            vec!["data", "the-the-file.txt"],
+        ]);
+        assert_eq!(expected_res, res);
+
+        let res = search_with_config(&config, &"some".to_string())?;
+        let expected_res = to_result(vec![vec!["data", "some-file1.txt"]]);
+        assert_eq!(expected_res, res);
+    }
+
+    config.search_str = "m{search}".to_string();
+
+    {
+        let res = search_with_config(&config, &"e-".to_string())?;
+        let expected_res = to_result(vec![vec!["data", "some-file1.txt"]]);
+        assert_eq!(expected_res, res);
+    }
+
+    Ok(())
+}
