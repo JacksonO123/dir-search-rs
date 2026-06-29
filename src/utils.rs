@@ -1,5 +1,5 @@
-use crate::lib_error;
-use std::{collections, error, fs, hash, path, string};
+use crate::lib_error::{self, ConfigParseError};
+use std::{collections, error, fs, path, string};
 
 macro_rules! const_to_macro {
     ($const_name:ident, $const_type: ty, $macro_name:ident, $value:expr) => {
@@ -16,7 +16,7 @@ macro_rules! const_to_macro {
 }
 
 pub mod config {
-    const_to_macro!(SEARCH_DIR, &'static str, _search_dir_m, "search_dir");
+    const_to_macro!(SEARCH_DIR, &'static str, search_dir_m, "search_dir");
     const_to_macro!(
         SEARCH_CONTENTS,
         &'static str,
@@ -45,28 +45,6 @@ enum SearchContents {
 
 pub fn byte_slice_to_string(slice: &[u8]) -> Result<String, string::FromUtf8Error> {
     Ok(String::from_utf8(slice.to_vec())?)
-}
-
-pub fn exists_as_val_in_map<K, V, E>(
-    map: &collections::HashMap<K, V>,
-    key: K,
-    expected_val: V,
-    err: E,
-) -> Result<bool, E>
-where
-    K: Eq + hash::Hash,
-    V: Eq,
-{
-    match map.get(&key) {
-        Some(value) => {
-            if *value != expected_val {
-                return Err(err);
-            }
-
-            Ok(true)
-        }
-        None => Ok(false),
-    }
 }
 
 pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::LoadConfigError> {
@@ -107,9 +85,10 @@ pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::L
         pos += 1;
     }
 
-    let search_dir = temp_map
-        .get(config::SEARCH_DIR)
-        .expect(format!("Expected {} to be configured", config::SEARCH_DIR).as_str());
+    let search_dir = match temp_map.get(config::SEARCH_DIR) {
+        Some(value) => value,
+        None => return Err(ConfigParseError::MissingSearchDir.into()),
+    };
 
     let search_contents = temp_map.get("search_contents").expect(
         format!(

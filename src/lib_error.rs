@@ -1,9 +1,10 @@
 use std::{error, fmt, string};
 
-use crate::utils::config::{search_contents_m, search_str_insert_m, search_str_m};
+use crate::utils::config::{search_contents_m, search_dir_m, search_str_insert_m, search_str_m};
 
 #[derive(Debug)]
 pub enum ConfigParseError {
+    MissingSearchDir,
     ExpectedEqDelimiter,
     UnexpectedSearchContentsValue,
     MissingConfigArg,
@@ -13,6 +14,7 @@ pub enum ConfigParseError {
 impl fmt::Display for ConfigParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let fmt_string = match self {
+            Self::MissingSearchDir => concat!("missing ", search_dir_m!()),
             Self::ExpectedEqDelimiter => "expected eq delimiter",
             Self::UnexpectedSearchContentsValue => {
                 concat!("unexpected ", search_contents_m!(), " value")
