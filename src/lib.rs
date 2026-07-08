@@ -1,86 +1,151 @@
 mod lib_error;
 mod utils;
 
-use std::{io::Write, path};
+use std::{io, io::Write};
 
 pub use utils::ParseConfig;
 pub use utils::SearchContents;
+pub use utils::search_with_config;
 
-pub fn search_with_config(
-    config: &utils::ParseConfig,
-    search_pattern: &str,
-) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
-    utils::search_with_config(config, search_pattern)
-}
-
-pub fn search_from_args(search_pattern: &str) {
+pub fn search_from_args(search_pattern: &str) -> Result<(), io::Error> {
     match utils::run_search_from_args(search_pattern) {
         Ok(res) => {
             let null_byte: &[u8] = &[0];
+            let stdout = io::stdout();
+            let lock = stdout.lock();
+            let mut writer = io::BufWriter::new(lock);
 
             for item in res {
-                let mut stdout = std::io::stdout();
                 let item = match item.to_str() {
                     Some(value) => value,
                     None => continue,
                 };
-                _ = stdout.write_all(item.as_bytes());
-                _ = stdout.write_all(null_byte);
+
+                _ = writer.write_all(item.as_bytes());
+                _ = writer.write_all(null_byte);
             }
+
+            writer.flush()?;
+
+            Ok(())
         }
         Err(e) => {
-            eprintln!("Error: {}", e);
+            crate::error_log!(e);
             std::process::exit(1);
         }
     }
 }
 
-#[test]
-fn test_search() -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = utils::ParseConfig {
-        search_dir: "data".to_string(),
-        search_str: "{search}".to_string(),
-        search_contents: utils::SearchContents::FileName,
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{error, path};
 
-    fn path_buf_from_vec(vec: Vec<&str>) -> path::PathBuf {
-        let mut buf = path::PathBuf::new();
-        for item in vec {
-            buf.push(item);
+    #[test]
+    fn test_search_file_names() -> Result<(), Box<dyn error::Error>> {
+        use std::fs;
+
+        let dir = std::env::temp_dir().join(format!("dir_search_contents_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir)?;
+
+        let files: &[(&str, &str)] = &[
+            ("another-file2.txt", ""),
+            ("some-file1.txt", ""),
+            ("the-the-file.txt", ""),
+        ];
+        for (name, contents) in files {
+            fs::write(dir.join(name), contents)?;
         }
-        buf
-    }
 
-    fn to_result(result_layout: Vec<Vec<&str>>) -> Vec<path::PathBuf> {
-        let mut res = vec![];
+        let mut config = utils::ParseConfig {
+            search_dir: dir.to_str().unwrap().to_string(),
+            search_str: "{search}".to_string(),
+            search_contents: utils::SearchContents::FileName,
+            parallel_preference: None,
+        };
 
-        for path_layout in result_layout {
-            res.push(path_buf_from_vec(path_layout));
+        {
+            let res = search_with_config(&config, &"the".to_string())?;
+            assert_eq!(
+                res,
+                expect(&dir, &["another-file2.txt", "the-the-file.txt"])
+            );
+
+            let res = search_with_config(&config, &"some".to_string())?;
+            assert_eq!(res, expect(&dir, &["some-file1.txt"]));
         }
 
-        res
+        config.search_str = "m{search}".to_string();
+
+        {
+            let res = search_with_config(&config, &"e-".to_string())?;
+            assert_eq!(res, expect(&dir, &["some-file1.txt"]));
+        }
+
+        Ok(())
     }
 
-    {
-        let res = search_with_config(&config, &"the".to_string())?;
-        let expected_res = to_result(vec![
-            vec!["data", "another-file2.txt"],
-            vec!["data", "the-the-file.txt"],
-        ]);
-        assert_eq!(expected_res, res);
+    #[test]
+    fn test_search_file_contents() -> Result<(), Box<dyn error::Error>> {
+        use std::fs;
 
-        let res = search_with_config(&config, &"some".to_string())?;
-        let expected_res = to_result(vec![vec!["data", "some-file1.txt"]]);
-        assert_eq!(expected_res, res);
+        let dir = std::env::temp_dir().join(format!("dir_search_contents_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir)?;
+
+        let files: &[(&str, &str)] = &[
+            ("a.txt", "the quick brown fox"),
+            ("b.txt", "lazy dog sleeps"),
+            ("c.txt", "quick response needed"),
+            ("d.txt", "nothing interesting here"),
+            ("e.txt", "brown sugar recipe"),
+            ("f.txt", "unique_token_xyz present"),
+        ];
+        for (name, contents) in files {
+            fs::write(dir.join(name), contents)?;
+        }
+
+        let mut config = utils::ParseConfig {
+            search_dir: dir.to_str().unwrap().to_string(),
+            search_str: "{search}".to_string(),
+            search_contents: utils::SearchContents::FileContents,
+            parallel_preference: None,
+        };
+
+        assert_eq!(
+            sorted(search_with_config(&config, "quick")?),
+            expect(&dir, &["a.txt", "c.txt"]),
+        );
+        assert_eq!(
+            sorted(search_with_config(&config, "brown")?),
+            expect(&dir, &["a.txt", "e.txt"]),
+        );
+        assert_eq!(
+            sorted(search_with_config(&config, "unique_token_xyz")?),
+            expect(&dir, &["f.txt"]),
+        );
+        assert_eq!(
+            search_with_config(&config, "zzz_absent_zzz")?,
+            Vec::<path::PathBuf>::new(),
+        );
+
+        config.search_str = "un{search}".to_string();
+        assert_eq!(
+            sorted(search_with_config(&config, "ique_token_xyz")?),
+            expect(&dir, &["f.txt"]),
+        );
+
+        fs::remove_dir_all(&dir)?;
+        Ok(())
     }
 
-    config.search_str = "m{search}".to_string();
-
-    {
-        let res = search_with_config(&config, &"e-".to_string())?;
-        let expected_res = to_result(vec![vec!["data", "some-file1.txt"]]);
-        assert_eq!(expected_res, res);
+    fn expect(dir: &path::PathBuf, names: &[&str]) -> Vec<path::PathBuf> {
+        sorted(names.iter().map(|n| dir.join(n)).collect())
     }
 
-    Ok(())
+    fn sorted(mut v: Vec<path::PathBuf>) -> Vec<path::PathBuf> {
+        v.sort();
+        v
+    }
 }

@@ -10,3 +10,8 @@ opt-level = 3
 lto = "fat"
 codegen-units = 1
 strip = "symbols"
+
+[[bench]]
+name = "bench"
+path = "benchmarks/bench.rs"
+harness = false
