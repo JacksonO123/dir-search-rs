@@ -44,7 +44,7 @@ pub enum SearchContents {
 }
 
 pub fn byte_slice_to_string(slice: &[u8]) -> Result<String, string::FromUtf8Error> {
-    Ok(String::from_utf8(slice.to_vec())?)
+    String::from_utf8(slice.to_vec())
 }
 
 pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::LoadConfigError> {
@@ -72,7 +72,7 @@ pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::L
         let eq_pos = pos;
         loop {
             pos += 1;
-            if pos >= config_contents.len() || config_contents[pos] == '\n' as u8 {
+            if pos >= config_contents.len() || config_contents[pos] == b'\n' {
                 break;
             }
         }
@@ -90,13 +90,12 @@ pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::L
         None => return Err(ConfigParseError::MissingSearchDir.into()),
     };
 
-    let search_contents = temp_map.get("search_contents").expect(
-        format!(
+    let search_contents = temp_map.get("search_contents").unwrap_or_else(|| {
+        panic!(
             "Expected {} to be configured (file_name | file_contents)",
             config::SEARCH_CONTENTS
         )
-        .as_str(),
-    );
+    });
 
     let search_contents = match search_contents.as_str() {
         "file_name" => SearchContents::FileName,
@@ -164,7 +163,7 @@ pub fn search_with_config(
 }
 
 pub fn run_search_from_args(
-    search_pattern: &String,
+    search_pattern: &str,
 ) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
@@ -186,5 +185,5 @@ pub fn run_search_from_args(
     let config_contents = fs::read(config_file.expect("Expected config file path"))?;
     let config = load_config(config_contents)?;
 
-    Ok(search_with_config(&config, search_pattern)?)
+    search_with_config(&config, search_pattern)
 }

@@ -3,14 +3,17 @@ mod utils;
 
 use std::{io::Write, path};
 
+pub use utils::ParseConfig;
+pub use utils::SearchContents;
+
 pub fn search_with_config(
     config: &utils::ParseConfig,
-    search_pattern: &String,
+    search_pattern: &str,
 ) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
     utils::search_with_config(config, search_pattern)
 }
 
-pub fn search_from_args(search_pattern: &String) {
+pub fn search_from_args(search_pattern: &str) {
     match utils::run_search_from_args(search_pattern) {
         Ok(res) => {
             let null_byte: &[u8] = &[0];
@@ -22,7 +25,7 @@ pub fn search_from_args(search_pattern: &String) {
                     None => continue,
                 };
                 _ = stdout.write_all(item.as_bytes());
-                _ = stdout.write_all(&null_byte);
+                _ = stdout.write_all(null_byte);
             }
         }
         Err(e) => {
