@@ -31,8 +31,8 @@ pub mod config {
 
 #[macro_export]
 macro_rules! error_log {
-    ($($arg:tt)*) => {
-        eprintln!("[ERROR]: {}", $($arg)*)
+    ($arg:expr) => {
+        eprintln!("[ERROR]: {}", $arg)
     };
 }
 
