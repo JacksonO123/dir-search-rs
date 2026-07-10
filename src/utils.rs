@@ -148,6 +148,15 @@ pub struct LastRunInfo {
     last_run_results: Vec<fs::DirEntry>,
 }
 
+impl LastRunInfo {
+    pub fn new(last_run_search_str_len: usize, last_run_results: Vec<fs::DirEntry>) -> Self {
+        Self {
+            last_run_search_str_len,
+            last_run_results,
+        }
+    }
+}
+
 pub fn search_with_config(
     config: &ParseConfig,
     search_str: &str,

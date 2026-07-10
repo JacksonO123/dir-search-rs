@@ -69,21 +69,60 @@ mod tests {
         {
             let res = search_with_config(&config, &"the".to_string(), None)?;
             assert_eq!(
-                res,
+                paths(res),
                 expect(&dir, &["another-file2.txt", "the-the-file.txt"])
             );
 
             let res = search_with_config(&config, &"some".to_string(), None)?;
-            assert_eq!(res, expect(&dir, &["some-file1.txt"]));
+            assert_eq!(paths(res), expect(&dir, &["some-file1.txt"]));
         }
 
         config.search_str = "m{search}".to_string();
 
         {
             let res = search_with_config(&config, &"e-".to_string(), None)?;
-            assert_eq!(res, expect(&dir, &["some-file1.txt"]));
+            assert_eq!(paths(res), expect(&dir, &["some-file1.txt"]));
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_reuses_last_run() -> Result<(), Box<dyn error::Error>> {
+        use std::fs;
+
+        let dir = std::env::temp_dir().join(format!("dir_search_last_run_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir)?;
+
+        let files = &["another-file2.txt", "some-file1.txt", "the-the-file.txt"];
+        for name in files {
+            fs::write(dir.join(name), "")?;
+        }
+
+        let config = utils::ParseConfig {
+            search_dir: dir.to_str().unwrap().to_string(),
+            search_str: "{search}".to_string(),
+            search_contents: utils::SearchContents::FileName,
+            parallel_preference: None,
+        };
+
+        let seed = search_with_config(&config, "the-the", None)?;
+        assert_eq!(paths_ref(&seed), expect(&dir, &["the-the-file.txt"]));
+
+        let last_run = utils::LastRunInfo::new("th".len(), seed);
+        let res = search_with_config(&config, "the", Some(last_run))?;
+        assert_eq!(paths(res), expect(&dir, &["the-the-file.txt"]));
+
+        let seed = search_with_config(&config, "the-the", None)?;
+        let last_run = utils::LastRunInfo::new("the".len(), seed);
+        let res = search_with_config(&config, "the", Some(last_run))?;
+        assert_eq!(
+            paths(res),
+            expect(&dir, &["another-file2.txt", "the-the-file.txt"])
+        );
+
+        fs::remove_dir_all(&dir)?;
         Ok(())
     }
 
@@ -115,25 +154,25 @@ mod tests {
         };
 
         assert_eq!(
-            sorted(search_with_config(&config, "quick", None)?),
+            paths(search_with_config(&config, "quick", None)?),
             expect(&dir, &["a.txt", "c.txt"]),
         );
         assert_eq!(
-            sorted(search_with_config(&config, "brown", None)?),
+            paths(search_with_config(&config, "brown", None)?),
             expect(&dir, &["a.txt", "e.txt"]),
         );
         assert_eq!(
-            sorted(search_with_config(&config, "unique_token_xyz", None)?),
+            paths(search_with_config(&config, "unique_token_xyz", None)?),
             expect(&dir, &["f.txt"]),
         );
         assert_eq!(
-            search_with_config(&config, "zzz_absent_zzz", None)?,
+            paths(search_with_config(&config, "zzz_absent_zzz", None)?),
             Vec::<path::PathBuf>::new(),
         );
 
         config.search_str = "un{search}".to_string();
         assert_eq!(
-            sorted(search_with_config(&config, "ique_token_xyz", None)?),
+            paths(search_with_config(&config, "ique_token_xyz", None)?),
             expect(&dir, &["f.txt"]),
         );
 
@@ -143,6 +182,14 @@ mod tests {
 
     fn expect(dir: &path::PathBuf, names: &[&str]) -> Vec<path::PathBuf> {
         sorted(names.iter().map(|n| dir.join(n)).collect())
+    }
+
+    fn paths(entries: Vec<std::fs::DirEntry>) -> Vec<path::PathBuf> {
+        sorted(entries.iter().map(|e| e.path()).collect())
+    }
+
+    fn paths_ref(entries: &[std::fs::DirEntry]) -> Vec<path::PathBuf> {
+        sorted(entries.iter().map(|e| e.path()).collect())
     }
 
     fn sorted(mut v: Vec<path::PathBuf>) -> Vec<path::PathBuf> {
