@@ -66,20 +66,20 @@ mod tests {
         };
 
         {
-            let res = search_with_config(&config, &"the".to_string())?;
+            let res = search_with_config(&config, &"the".to_string(), None)?;
             assert_eq!(
                 res,
                 expect(&dir, &["another-file2.txt", "the-the-file.txt"])
             );
 
-            let res = search_with_config(&config, &"some".to_string())?;
+            let res = search_with_config(&config, &"some".to_string(), None)?;
             assert_eq!(res, expect(&dir, &["some-file1.txt"]));
         }
 
         config.search_str = "m{search}".to_string();
 
         {
-            let res = search_with_config(&config, &"e-".to_string())?;
+            let res = search_with_config(&config, &"e-".to_string(), None)?;
             assert_eq!(res, expect(&dir, &["some-file1.txt"]));
         }
 
@@ -114,25 +114,25 @@ mod tests {
         };
 
         assert_eq!(
-            sorted(search_with_config(&config, "quick")?),
+            sorted(search_with_config(&config, "quick", None)?),
             expect(&dir, &["a.txt", "c.txt"]),
         );
         assert_eq!(
-            sorted(search_with_config(&config, "brown")?),
+            sorted(search_with_config(&config, "brown", None)?),
             expect(&dir, &["a.txt", "e.txt"]),
         );
         assert_eq!(
-            sorted(search_with_config(&config, "unique_token_xyz")?),
+            sorted(search_with_config(&config, "unique_token_xyz", None)?),
             expect(&dir, &["f.txt"]),
         );
         assert_eq!(
-            search_with_config(&config, "zzz_absent_zzz")?,
+            search_with_config(&config, "zzz_absent_zzz", None)?,
             Vec::<path::PathBuf>::new(),
         );
 
         config.search_str = "un{search}".to_string();
         assert_eq!(
-            sorted(search_with_config(&config, "ique_token_xyz")?),
+            sorted(search_with_config(&config, "ique_token_xyz", None)?),
             expect(&dir, &["f.txt"]),
         );
 
