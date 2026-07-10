@@ -93,7 +93,7 @@ fn main() {
         parallel_preference: None,
     };
     let (p_min, p_med, p_mean, p_hits) =
-        bench(|| search_with_config(&config, NEEDLE).unwrap().len());
+        bench(|| search_with_config(&config, NEEDLE, None).unwrap().len());
 
     let (s_min, s_med, s_mean, s_hits) = bench(|| serial_search(DIR, NEEDLE).len());
 
