@@ -16,7 +16,8 @@ pub fn search_from_args(search_pattern: &str) -> Result<(), io::Error> {
             let mut writer = io::BufWriter::new(lock);
 
             for item in res {
-                let item = match item.to_str() {
+                let path = item.path();
+                let item = match path.to_str() {
                     Some(value) => value,
                     None => continue,
                 };

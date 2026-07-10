@@ -1,7 +1,7 @@
 use crate::lib_error::{self, ConfigParseError};
 use std::io::Read;
 use std::num::{NonZero, NonZeroUsize};
-use std::{collections, error, fs, io, num, path, string, thread};
+use std::{collections, error, fs, io, num, string, thread};
 
 macro_rules! const_to_macro {
     ($const_name:ident, $const_type: ty, $macro_name:ident, $value:expr) => {
@@ -224,7 +224,7 @@ pub fn search_file_contents(
 
     let result: Vec<fs::DirEntry> = thread::scope(|s| {
         chunks
-            .iter()
+            .into_iter()
             .map(|chunk| s.spawn(|| search_chunk(chunk, search_str)))
             .collect::<Vec<_>>()
             .into_iter()
@@ -250,7 +250,7 @@ fn to_owned_chunks<T>(items: Vec<T>, chunk_size: NonZero<usize>) -> Vec<Vec<T>> 
     res
 }
 
-pub fn search_chunk(chunk: &[fs::DirEntry], search_str: &str) -> Vec<fs::DirEntry> {
+pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_str: &str) -> Vec<fs::DirEntry> {
     let mut res_paths: Vec<fs::DirEntry> = vec![];
     let mut buf = String::new();
 
@@ -281,7 +281,7 @@ pub fn search_chunk(chunk: &[fs::DirEntry], search_str: &str) -> Vec<fs::DirEntr
 
 pub fn run_search_from_args(
     search_pattern: &str,
-) -> Result<Vec<path::PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<Vec<fs::DirEntry>, Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
 
     let mut config_file: Option<String> = None;
