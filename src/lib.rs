@@ -1,6 +1,7 @@
 mod lib_error;
 mod utils;
 
+pub use utils::LastRunInfo;
 pub use utils::ParseConfig;
 pub use utils::SearchContents;
 pub use utils::search_with_config;

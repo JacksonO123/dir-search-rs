@@ -25,8 +25,8 @@ pub enum SearchContents {
 }
 
 pub struct LastRunInfo {
-    last_run_search_str_len: usize,
-    last_run_results: Vec<fs::DirEntry>,
+    pub last_run_search_str_len: usize,
+    pub last_run_results: Vec<fs::DirEntry>,
 }
 
 impl LastRunInfo {
