@@ -87,9 +87,9 @@ fn main() {
     println!();
 
     let config = ParseConfig {
-        search_dir: DIR.to_string(),
+        search_dirs: vec![DIR.to_string()],
         search_str: "{search}".to_string(),
-        search_contents: SearchContents::FileContents,
+        search_contents: SearchContents::FileContents(None),
         parallel_preference: None,
     };
     let (p_min, p_med, p_mean, p_hits) =

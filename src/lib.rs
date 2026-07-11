@@ -1,41 +1,9 @@
 mod lib_error;
 mod utils;
 
-use std::{io, io::Write};
-
 pub use utils::ParseConfig;
 pub use utils::SearchContents;
 pub use utils::search_with_config;
-
-pub fn search_from_args(search_pattern: &str) -> Result<(), io::Error> {
-    match utils::run_search_from_args(search_pattern) {
-        Ok(res) => {
-            let null_byte: &[u8] = &[0];
-            let stdout = io::stdout();
-            let lock = stdout.lock();
-            let mut writer = io::BufWriter::new(lock);
-
-            for item in res {
-                let path = item.path();
-                let item = match path.to_str() {
-                    Some(value) => value,
-                    None => continue,
-                };
-
-                _ = writer.write_all(item.as_bytes());
-                _ = writer.write_all(null_byte);
-            }
-
-            writer.flush()?;
-
-            Ok(())
-        }
-        Err(e) => {
-            crate::error_log!(e);
-            std::process::exit(1);
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -146,7 +114,7 @@ mod tests {
                 dir2.to_str().unwrap().to_string(),
             ],
             search_str: "{search}".to_string(),
-            search_contents: utils::SearchContents::FileContents,
+            search_contents: utils::SearchContents::FileContents(None),
             parallel_preference: None,
         };
 

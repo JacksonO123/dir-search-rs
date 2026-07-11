@@ -1,34 +1,9 @@
-use crate::lib_error::{self, ConfigParseError};
+use crate::lib_error;
 use std::io::Read;
 use std::num::{NonZero, NonZeroUsize};
-use std::{collections, error, fs, io, num, string, thread};
+use std::{error, fs, io, num, thread};
 
-macro_rules! const_to_macro {
-    ($const_name:ident, $const_type: ty, $macro_name:ident, $value:expr) => {
-        macro_rules! $macro_name {
-            () => {
-                $value
-            };
-        }
-
-        pub(crate) use $macro_name;
-
-        pub const $const_name: $const_type = $value;
-    };
-}
-
-pub mod config {
-    const_to_macro!(SEARCH_DIR, &str, search_dir_m, "search_dir");
-    const_to_macro!(SEARCH_CONTENTS, &str, search_contents_m, "search_contents");
-    const_to_macro!(SEARCH_STR_INSERT, &str, search_str_insert_m, "{search}");
-    const_to_macro!(SEARCH_STR, &str, search_str_m, "search_str");
-    const_to_macro!(
-        PARALLEL_PREFERENCE,
-        &str,
-        parallel_preference_m,
-        "parallel_preference"
-    );
-}
+const SEARCH_STR_INSERT: &str = "{search}";
 
 #[macro_export]
 macro_rules! error_log {
@@ -46,101 +21,7 @@ pub struct ParseConfig {
 
 pub enum SearchContents {
     FileName,
-    FileContents,
-}
-
-pub fn byte_slice_to_string(slice: &[u8]) -> Result<String, string::FromUtf8Error> {
-    String::from_utf8(slice.to_vec())
-}
-
-pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::LoadConfigError> {
-    let mut temp_map = collections::HashMap::<String, String>::new();
-
-    let mut pos: usize = 0;
-    'outer: while pos < config_contents.len() {
-        let start = pos;
-        loop {
-            pos += 1;
-
-            if pos >= config_contents.len() {
-                break 'outer;
-            }
-
-            match config_contents[pos] as char {
-                '=' => break,
-                '\n' => {
-                    return Err(lib_error::ConfigParseError::ExpectedEqDelimiter.into());
-                }
-                _ => {}
-            }
-        }
-        let eq_pos = pos;
-        loop {
-            pos += 1;
-            if pos >= config_contents.len() || config_contents[pos] == b'\n' {
-                break;
-            }
-        }
-
-        let key = byte_slice_to_string(&config_contents[start..eq_pos])?;
-        let value = byte_slice_to_string(&config_contents[eq_pos + 1..pos])?;
-
-        temp_map.insert(key.clone(), value.clone());
-
-        pos += 1;
-    }
-
-    let search_dir = match temp_map.get(config::SEARCH_DIR) {
-        Some(value) => value,
-        None => return Err(ConfigParseError::MissingSearchDir.into()),
-    };
-
-    let search_contents = temp_map.get("search_contents").unwrap_or_else(|| {
-        panic!(
-            "Expected {} to be configured (file_name | file_contents)",
-            config::SEARCH_CONTENTS
-        )
-    });
-
-    let search_contents = match search_contents.as_str() {
-        "file_name" => SearchContents::FileName,
-        "file_contents" => SearchContents::FileContents,
-        _ => {
-            return Err(lib_error::ConfigParseError::UnexpectedSearchContentsValue.into());
-        }
-    };
-
-    let search_str = match temp_map.get(config::SEARCH_STR) {
-        Some(value) => {
-            if !value.contains(config::SEARCH_STR_INSERT) {
-                return Err(
-                    lib_error::ConfigParseError::SearchStringDoesNotHaveSearchInsert.into(),
-                );
-            }
-
-            value
-        }
-        None => config::SEARCH_STR_INSERT,
-    };
-
-    let parallel_preference_error_msg = concat!(
-        "Invalid ",
-        config::parallel_preference_m!(),
-        " expected nonzero usize"
-    );
-    let parallel_preference = temp_map.get(config::PARALLEL_PREFERENCE).map(|value| {
-        num::NonZeroUsize::new(value.parse::<usize>().expect(parallel_preference_error_msg))
-            .expect(parallel_preference_error_msg)
-    });
-
-    let parse_config = ParseConfig {
-        search_dirs: vec![search_dir.clone()],
-        search_str: search_str.to_owned(),
-        search_contents,
-        parallel_preference,
-    };
-
-    Ok(parse_config)
+    FileContents(Option<String>),
 }
 
 pub struct LastRunInfo {
@@ -185,14 +66,14 @@ pub fn search_with_config(
             .flatten()
             .collect::<Vec<_>>()
     };
-    let search_str = config
-        .search_str
-        .replace(config::SEARCH_STR_INSERT, search_str);
+    let search_str = config.search_str.replace(SEARCH_STR_INSERT, search_str);
     let search_str = search_str.as_str();
 
-    let res = match config.search_contents {
+    let res = match &config.search_contents {
         SearchContents::FileName => search_file_names(dir_contents, search_str),
-        SearchContents::FileContents => search_file_contents(config, dir_contents, search_str),
+        SearchContents::FileContents(file_filter) => {
+            search_file_contents(config, dir_contents, search_str, file_filter)
+        }
     };
 
     match res {
@@ -229,7 +110,17 @@ pub fn search_file_contents(
     config: &ParseConfig,
     dir_contents: Vec<fs::DirEntry>,
     search_str: &str,
+    file_filter: &Option<String>,
 ) -> Result<Vec<fs::DirEntry>, io::Error> {
+    let dir_contents = if let Some(file_filter) = file_filter {
+        dir_contents
+            .into_iter()
+            .filter(|item| item.file_name().to_str().unwrap().contains(file_filter))
+            .collect()
+    } else {
+        dir_contents
+    };
+
     if dir_contents.is_empty() {
         return Ok(vec![]);
     }
@@ -265,6 +156,8 @@ fn to_owned_chunks<T>(items: Vec<T>, chunk_size: NonZero<usize>) -> Vec<Vec<T>> 
         }
     }
 
+    res.push(chunk);
+
     res
 }
 
@@ -295,30 +188,4 @@ pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_str: &str) -> Vec<fs::DirEn
     }
 
     res_paths
-}
-
-pub fn run_search_from_args(
-    search_pattern: &str,
-) -> Result<Vec<fs::DirEntry>, Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
-
-    let mut config_file: Option<String> = None;
-
-    for (i, arg) in args.iter().enumerate() {
-        if arg == "-c" {
-            if args.len() <= i + 1 {
-                return Err(Box::<lib_error::LoadConfigError>::new(
-                    lib_error::ConfigParseError::MissingConfigArg.into(),
-                ));
-            }
-
-            let after = args[i + 1].clone();
-            config_file = Some(after);
-        }
-    }
-
-    let config_contents = fs::read(config_file.expect("Expected config file path"))?;
-    let config = load_config(config_contents)?;
-
-    search_with_config(&config, search_pattern, None)
 }
