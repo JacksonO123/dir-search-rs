@@ -27,17 +27,15 @@ impl ParseConfig {
         search_contents: SearchContents,
         parallel_preference: Option<num::NonZeroUsize>,
     ) -> Result<Self, CreateConfigError> {
-        if search_strs.len() < 1 {
+        if search_strs.is_empty() {
             return Err(CreateConfigError::MissingSearchStrs);
         }
 
-        match search_contents {
-            SearchContents::FileName(from_start) => {
-                if from_start && search_strs.len() > 1 {
-                    return Err(CreateConfigError::TooManySearchStrs);
-                }
-            }
-            _ => {}
+        if let SearchContents::FileName(from_start) = search_contents
+            && from_start
+            && search_strs.len() > 1
+        {
+            return Err(CreateConfigError::TooManySearchStrs);
         }
 
         Ok(Self {
@@ -89,7 +87,7 @@ pub struct SearchStrData<'a> {
 }
 
 impl<'a> SearchStrData<'a> {
-    pub fn new(raw_search_str: &String, search_str: &'a str) -> Self {
+    pub fn new(raw_search_str: &str, search_str: &'a str) -> Self {
         Self {
             prefix_end_index: raw_search_str.find(SEARCH_STR_INSERT),
             search_str,
@@ -267,7 +265,8 @@ pub fn search_chunk<'a>(
                 && let Some(pre_sentinel_end) = item.prefix_end_index
                 && pre_sentinel_end > 0
             {
-                let pre_search_sentinel_str = &item.replaced_str[0..pre_sentinel_end];
+                let pre_search_sentinel_str =
+                    &item.replaced_str[0..pre_sentinel_end].to_ascii_lowercase();
                 file_data
                     .find(pre_search_sentinel_str)
                     .map(|prefix_index| {
