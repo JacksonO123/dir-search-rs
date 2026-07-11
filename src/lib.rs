@@ -25,7 +25,7 @@ mod tests {
         let mut config = utils::ParseConfig {
             search_dirs: vec![dir.to_str().unwrap().to_string()],
             search_str: "{search}".to_string(),
-            search_contents: utils::SearchContents::FileName,
+            search_contents: utils::SearchContents::FileName(false),
             parallel_preference: None,
         };
 
@@ -66,7 +66,7 @@ mod tests {
         let config = utils::ParseConfig {
             search_dirs: vec![dir.to_str().unwrap().to_string()],
             search_str: "{search}".to_string(),
-            search_contents: utils::SearchContents::FileName,
+            search_contents: utils::SearchContents::FileName(false),
             parallel_preference: None,
         };
 

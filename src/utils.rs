@@ -20,7 +20,7 @@ pub struct ParseConfig {
 }
 
 pub enum SearchContents {
-    FileName,
+    FileName(bool),
     FileContents(Option<String>),
 }
 
@@ -70,7 +70,9 @@ pub fn search_with_config(
     let search_str = search_str.as_str();
 
     let res = match &config.search_contents {
-        SearchContents::FileName => search_file_names(dir_contents, search_str),
+        SearchContents::FileName(from_start) => {
+            search_file_names(dir_contents, search_str, *from_start)
+        }
         SearchContents::FileContents(file_filter) => {
             search_file_contents(config, dir_contents, search_str, file_filter)
         }
@@ -85,6 +87,7 @@ pub fn search_with_config(
 pub fn search_file_names(
     dir_contents: Vec<fs::DirEntry>,
     search_str: &str,
+    from_start: bool,
 ) -> Result<Vec<fs::DirEntry>, io::Error> {
     let mut res_paths: Vec<fs::DirEntry> = vec![];
 
@@ -98,7 +101,11 @@ pub fn search_file_names(
             }
         };
 
-        if name.contains(search_str) {
+        if if from_start {
+            name.starts_with(search_str)
+        } else {
+            name.contains(search_str)
+        } {
             res_paths.push(dir_entry);
         }
     }
