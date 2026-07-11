@@ -14,9 +14,43 @@ macro_rules! error_log {
 
 pub struct ParseConfig {
     pub search_dirs: Vec<String>,
-    pub search_str: String,
+    pub search_strs: Vec<String>,
     pub search_contents: SearchContents,
     pub parallel_preference: Option<num::NonZeroUsize>,
+}
+
+pub enum CreateConfigError {
+    MissingSearchStrs,
+    TooManySearchStrs,
+}
+
+impl ParseConfig {
+    pub fn try_new(
+        search_dirs: Vec<String>,
+        search_strs: Vec<String>,
+        search_contents: SearchContents,
+        parallel_preference: Option<num::NonZeroUsize>,
+    ) -> Result<Self, CreateConfigError> {
+        if search_strs.len() < 1 {
+            return Err(CreateConfigError::MissingSearchStrs);
+        }
+
+        match search_contents {
+            SearchContents::FileName(from_start) => {
+                if from_start && search_strs.len() > 1 {
+                    return Err(CreateConfigError::TooManySearchStrs);
+                }
+            }
+            _ => {}
+        }
+
+        Ok(Self {
+            search_dirs,
+            search_strs,
+            search_contents,
+            parallel_preference,
+        })
+    }
 }
 
 pub enum SearchContents {
@@ -66,15 +100,18 @@ pub fn search_with_config(
             .flatten()
             .collect::<Vec<_>>()
     };
-    let search_str = config.search_str.replace(SEARCH_STR_INSERT, search_str);
-    let search_str = search_str.as_str();
+    let search_strs = config
+        .search_strs
+        .iter()
+        .map(|item| item.replace(SEARCH_STR_INSERT, search_str))
+        .collect::<Vec<_>>();
 
     let res = match &config.search_contents {
         SearchContents::FileName(from_start) => {
-            search_file_names(dir_contents, search_str, *from_start)
+            search_file_names(dir_contents, &search_strs[0], *from_start)
         }
         SearchContents::FileContents(file_filter) => {
-            search_file_contents(config, dir_contents, search_str, file_filter)
+            search_file_contents(config, dir_contents, search_strs, file_filter)
         }
     };
 
@@ -116,7 +153,7 @@ pub fn search_file_names(
 pub fn search_file_contents(
     config: &ParseConfig,
     dir_contents: Vec<fs::DirEntry>,
-    search_str: &str,
+    search_strs: Vec<String>,
     file_filter: &Option<String>,
 ) -> Result<Vec<fs::DirEntry>, io::Error> {
     let dir_contents = if let Some(file_filter) = file_filter {
@@ -141,7 +178,7 @@ pub fn search_file_contents(
     let result: Vec<fs::DirEntry> = thread::scope(|s| {
         chunks
             .into_iter()
-            .map(|chunk| s.spawn(|| search_chunk(chunk, search_str)))
+            .map(|chunk| s.spawn(|| search_chunk(chunk, &search_strs)))
             .collect::<Vec<_>>()
             .into_iter()
             .flat_map(|handle| handle.join().unwrap())
@@ -168,7 +205,7 @@ fn to_owned_chunks<T>(items: Vec<T>, chunk_size: NonZero<usize>) -> Vec<Vec<T>> 
     res
 }
 
-pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_str: &str) -> Vec<fs::DirEntry> {
+pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_strs: &Vec<String>) -> Vec<fs::DirEntry> {
     let mut res_paths: Vec<fs::DirEntry> = vec![];
     let mut buf = String::new();
 
@@ -189,7 +226,11 @@ pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_str: &str) -> Vec<fs::DirEn
                 continue;
             }
         };
-        if buf[0..bytes].contains(search_str) {
+        let file_data = buf[0..bytes].to_ascii_lowercase();
+        let contains = search_strs
+            .iter()
+            .all(|item| file_data.contains(&item.to_ascii_lowercase()));
+        if contains {
             res_paths.push(dir_entry);
         }
     }

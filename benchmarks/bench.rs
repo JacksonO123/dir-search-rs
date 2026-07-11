@@ -14,7 +14,7 @@ fn serial_search(dir: &str, needle: &str) -> Vec<path::PathBuf> {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(err) => {
-            eprintln!("could not read {dir}: {err}");
+            println!("could not read {dir}: {err}");
             return res;
         }
     };
@@ -69,7 +69,7 @@ fn mb_per_s(bytes: u64, d: Duration) -> f64 {
 fn main() {
     let (count, bytes) = dir_stats(DIR);
     if count == 0 {
-        eprintln!("no files found in {DIR}/");
+        println!("no files found in {DIR}/");
         std::process::exit(1);
     }
 
@@ -88,7 +88,7 @@ fn main() {
 
     let config = ParseConfig {
         search_dirs: vec![DIR.to_string()],
-        search_str: "{search}".to_string(),
+        search_strs: vec!["{search}".to_string()],
         search_contents: SearchContents::FileContents(None),
         parallel_preference: None,
     };

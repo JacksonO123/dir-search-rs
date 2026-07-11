@@ -24,7 +24,7 @@ mod tests {
 
         let mut config = utils::ParseConfig {
             search_dirs: vec![dir.to_str().unwrap().to_string()],
-            search_str: "{search}".to_string(),
+            search_strs: vec!["{search}".to_string()],
             search_contents: utils::SearchContents::FileName(false),
             parallel_preference: None,
         };
@@ -40,7 +40,7 @@ mod tests {
             assert_eq!(paths(res), expect(&dir, &["some-file1.txt"]));
         }
 
-        config.search_str = "m{search}".to_string();
+        config.search_strs = vec!["m{search}".to_string()];
 
         {
             let res = search_with_config(&config, &"e-".to_string(), None)?;
@@ -65,7 +65,7 @@ mod tests {
 
         let config = utils::ParseConfig {
             search_dirs: vec![dir.to_str().unwrap().to_string()],
-            search_str: "{search}".to_string(),
+            search_strs: vec!["{search}".to_string()],
             search_contents: utils::SearchContents::FileName(false),
             parallel_preference: None,
         };
@@ -114,7 +114,7 @@ mod tests {
                 dir.to_str().unwrap().to_string(),
                 dir2.to_str().unwrap().to_string(),
             ],
-            search_str: "{search}".to_string(),
+            search_strs: vec!["{search}".to_string()],
             search_contents: utils::SearchContents::FileContents(None),
             parallel_preference: None,
         };
@@ -143,7 +143,7 @@ mod tests {
                 .collect::<Vec<_>>()
         );
 
-        config.search_str = "un{search}".to_string();
+        config.search_strs = vec!["un{search}".to_string()];
         assert_eq!(
             paths(search_with_config(&config, "ique_token_xyz", None)?),
             expect(&dir, &["f.txt"]),
