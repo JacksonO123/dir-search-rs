@@ -229,7 +229,9 @@ fn to_owned_chunks<T>(items: Vec<T>, chunk_size: NonZero<usize>) -> Vec<Vec<T>> 
         }
     }
 
-    res.push(chunk);
+    if !chunk.is_empty() {
+        res.push(chunk);
+    }
 
     res
 }
