@@ -46,24 +46,19 @@ mod tests {
     fn test_search_file_names() -> Result<(), Box<dyn error::Error>> {
         use std::fs;
 
-        let dir = std::env::temp_dir().join(format!("dir_search_contents_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir)?;
-
-        let files: &[(&str, &str)] = &[
+        let files = &[
             ("another-file2.txt", ""),
             ("some-file1.txt", ""),
             ("the-the-file.txt", ""),
         ];
-        for (name, contents) in files {
-            fs::write(dir.join(name), contents)?;
-        }
+        let dir = write_to_temp_dir(files, 0)?;
 
         let mut config = utils::ParseConfig {
-            search_dir: dir.to_str().unwrap().to_string(),
+            search_dirs: vec![dir.to_str().unwrap().to_string()],
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileName,
             parallel_preference: None,
+            debug: false,
         };
 
         {
@@ -84,6 +79,8 @@ mod tests {
             assert_eq!(paths(res), expect(&dir, &["some-file1.txt"]));
         }
 
+        let _ = fs::remove_dir_all(&dir);
+
         Ok(())
     }
 
@@ -91,20 +88,19 @@ mod tests {
     fn test_search_reuses_last_run() -> Result<(), Box<dyn error::Error>> {
         use std::fs;
 
-        let dir = std::env::temp_dir().join(format!("dir_search_last_run_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir)?;
-
-        let files = &["another-file2.txt", "some-file1.txt", "the-the-file.txt"];
-        for name in files {
-            fs::write(dir.join(name), "")?;
-        }
+        let files = &[
+            ("another-file2.txt", ""),
+            ("some-file1.txt", ""),
+            ("the-the-file.txt", ""),
+        ];
+        let dir = write_to_temp_dir(files, 1)?;
 
         let config = utils::ParseConfig {
-            search_dir: dir.to_str().unwrap().to_string(),
+            search_dirs: vec![dir.to_str().unwrap().to_string()],
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileName,
             parallel_preference: None,
+            debug: false,
         };
 
         let seed = search_with_config(&config, "the-the", None)?;
@@ -130,27 +126,31 @@ mod tests {
     fn test_search_file_contents() -> Result<(), Box<dyn error::Error>> {
         use std::fs;
 
-        let dir = std::env::temp_dir().join(format!("dir_search_contents_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir)?;
-
-        let files: &[(&str, &str)] = &[
+        let files = &[
             ("a.txt", "the quick brown fox"),
-            ("b.txt", "lazy dog sleeps"),
+            ("b.txt", "lazy dog sleeps with a_key"),
             ("c.txt", "quick response needed"),
             ("d.txt", "nothing interesting here"),
             ("e.txt", "brown sugar recipe"),
             ("f.txt", "unique_token_xyz present"),
         ];
-        for (name, contents) in files {
-            fs::write(dir.join(name), contents)?;
-        }
+        let dir = write_to_temp_dir(files, 2)?;
+
+        let files2 = &[
+            ("other.txt", "a_key in a file"),
+            ("a_file.txt", "some_Text in a file"),
+        ];
+        let dir2 = write_to_temp_dir(files2, 3)?;
 
         let mut config = utils::ParseConfig {
-            search_dir: dir.to_str().unwrap().to_string(),
+            search_dirs: vec![
+                dir.to_str().unwrap().to_string(),
+                dir2.to_str().unwrap().to_string(),
+            ],
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileContents,
             parallel_preference: None,
+            debug: true,
         };
 
         assert_eq!(
@@ -168,6 +168,13 @@ mod tests {
         assert_eq!(
             paths(search_with_config(&config, "zzz_absent_zzz", None)?),
             Vec::<path::PathBuf>::new(),
+        );
+        assert_eq!(
+            paths(search_with_config(&config, "a_key", None)?),
+            vec![expect(&dir, &["b.txt"]), expect(&dir2, &["other.txt"])]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
         );
 
         config.search_str = "un{search}".to_string();
@@ -195,5 +202,21 @@ mod tests {
     fn sorted(mut v: Vec<path::PathBuf>) -> Vec<path::PathBuf> {
         v.sort();
         v
+    }
+
+    fn write_to_temp_dir(
+        files: &[(&str, &str)],
+        unique_id: usize,
+    ) -> Result<path::PathBuf, Box<dyn error::Error>> {
+        use std::fs;
+
+        let dir = std::env::temp_dir().join(format!("dir_search_contents_{}", unique_id));
+        fs::create_dir_all(&dir)?;
+
+        for (name, contents) in files {
+            fs::write(dir.join(name), contents)?;
+        }
+
+        Ok(dir)
     }
 }

@@ -38,10 +38,11 @@ macro_rules! error_log {
 }
 
 pub struct ParseConfig {
-    pub search_dir: String,
+    pub search_dirs: Vec<String>,
     pub search_str: String,
     pub search_contents: SearchContents,
     pub parallel_preference: Option<num::NonZeroUsize>,
+    pub debug: bool,
 }
 
 pub enum SearchContents {
@@ -134,10 +135,11 @@ pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::L
     });
 
     let parse_config = ParseConfig {
-        search_dir: search_dir.clone(),
+        search_dirs: vec![search_dir.clone()],
         search_str: search_str.to_owned(),
         search_contents,
         parallel_preference,
+        debug: false,
     };
 
     Ok(parse_config)
@@ -167,14 +169,23 @@ pub fn search_with_config(
     {
         last_run_info.last_run_results
     } else {
-        fs::read_dir(&config.search_dir)?
-            .filter_map(|entry| {
-                if let Err(err) = &entry {
-                    error_log!(err);
-                }
-                entry.ok()
+        config
+            .search_dirs
+            .iter()
+            .filter_map(|item| -> Option<Vec<fs::DirEntry>> {
+                fs::read_dir(item).ok().map(|entries| {
+                    entries
+                        .filter_map(|entry| {
+                            if let Err(err) = &entry {
+                                error_log!(err);
+                            }
+                            entry.ok()
+                        })
+                        .collect::<Vec<_>>()
+                })
             })
-            .collect()
+            .flatten()
+            .collect::<Vec<_>>()
     };
     let search_str = config
         .search_str
