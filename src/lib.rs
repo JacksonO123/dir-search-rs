@@ -58,7 +58,6 @@ mod tests {
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileName,
             parallel_preference: None,
-            debug: false,
         };
 
         {
@@ -100,7 +99,6 @@ mod tests {
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileName,
             parallel_preference: None,
-            debug: false,
         };
 
         let seed = search_with_config(&config, "the-the", None)?;
@@ -150,7 +148,6 @@ mod tests {
             search_str: "{search}".to_string(),
             search_contents: utils::SearchContents::FileContents,
             parallel_preference: None,
-            debug: true,
         };
 
         assert_eq!(

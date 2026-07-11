@@ -42,7 +42,6 @@ pub struct ParseConfig {
     pub search_str: String,
     pub search_contents: SearchContents,
     pub parallel_preference: Option<num::NonZeroUsize>,
-    pub debug: bool,
 }
 
 pub enum SearchContents {
@@ -139,7 +138,6 @@ pub fn load_config(config_contents: Vec<u8>) -> Result<ParseConfig, lib_error::L
         search_str: search_str.to_owned(),
         search_contents,
         parallel_preference,
-        debug: false,
     };
 
     Ok(parse_config)
