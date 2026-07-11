@@ -16,3 +16,8 @@ impl fmt::Display for SearchError {
         write!(f, "{fmt_string}")
     }
 }
+
+pub enum CreateConfigError {
+    MissingSearchStrs,
+    TooManySearchStrs,
+}

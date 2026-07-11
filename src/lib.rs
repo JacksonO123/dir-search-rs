@@ -115,7 +115,7 @@ mod tests {
                 dir2.to_str().unwrap().to_string(),
             ],
             search_strs: vec!["{search}".to_string()],
-            search_contents: utils::SearchContents::FileContents(None),
+            search_contents: utils::SearchContents::FileContents(None, false),
             parallel_preference: None,
         };
 
@@ -146,6 +146,12 @@ mod tests {
         config.search_strs = vec!["un{search}".to_string()];
         assert_eq!(
             paths(search_with_config(&config, "ique_token_xyz", None)?),
+            expect(&dir, &["f.txt"]),
+        );
+
+        config.search_contents = SearchContents::FileContents(None, true);
+        assert_eq!(
+            paths(search_with_config(&config, "xyz", None)?),
             expect(&dir, &["f.txt"]),
         );
 

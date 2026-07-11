@@ -1,7 +1,8 @@
-use crate::lib_error;
 use std::io::Read;
 use std::num::{NonZero, NonZeroUsize};
 use std::{error, fs, io, num, thread};
+
+use crate::lib_error::{CreateConfigError, SearchError};
 
 const SEARCH_STR_INSERT: &str = "{search}";
 
@@ -17,11 +18,6 @@ pub struct ParseConfig {
     pub search_strs: Vec<String>,
     pub search_contents: SearchContents,
     pub parallel_preference: Option<num::NonZeroUsize>,
-}
-
-pub enum CreateConfigError {
-    MissingSearchStrs,
-    TooManySearchStrs,
 }
 
 impl ParseConfig {
@@ -55,7 +51,21 @@ impl ParseConfig {
 
 pub enum SearchContents {
     FileName(bool),
-    FileContents(Option<String>),
+    /// file name filter (contains), search in line
+    /// when search in line is enabled, the search will look for the inserted
+    /// search string in the string from the end of the pre {search} sentinel
+    /// to the end of the line
+    ///
+    /// example:
+    ///   search_strs: vec!["a_test={search}".to_string()]
+    /// where:
+    ///   search in line = true
+    ///   {search} = "my_string"
+    /// with the file contents:
+    ///   a_test=some text before my_string
+    /// will match this file
+    /// with search in line = false it will not
+    FileContents(Option<String>, bool),
 }
 
 pub struct LastRunInfo {
@@ -68,6 +78,22 @@ impl LastRunInfo {
         Self {
             last_run_search_str_len,
             last_run_results,
+        }
+    }
+}
+
+pub struct SearchStrData<'a> {
+    prefix_end_index: Option<usize>,
+    search_str: &'a str,
+    replaced_str: String,
+}
+
+impl<'a> SearchStrData<'a> {
+    pub fn new(raw_search_str: &String, search_str: &'a str) -> Self {
+        Self {
+            prefix_end_index: raw_search_str.find(SEARCH_STR_INSERT),
+            search_str,
+            replaced_str: raw_search_str.replace(SEARCH_STR_INSERT, search_str),
         }
     }
 }
@@ -103,16 +129,20 @@ pub fn search_with_config(
     let search_strs = config
         .search_strs
         .iter()
-        .map(|item| item.replace(SEARCH_STR_INSERT, search_str))
+        .map(|item| SearchStrData::new(item, search_str))
         .collect::<Vec<_>>();
 
     let res = match &config.search_contents {
         SearchContents::FileName(from_start) => {
-            search_file_names(dir_contents, &search_strs[0], *from_start)
+            search_file_names(dir_contents, &search_strs[0].replaced_str, *from_start)
         }
-        SearchContents::FileContents(file_filter) => {
-            search_file_contents(config, dir_contents, search_strs, file_filter)
-        }
+        SearchContents::FileContents(file_filter, search_in_line) => search_file_contents(
+            config,
+            dir_contents,
+            search_strs,
+            file_filter,
+            *search_in_line,
+        ),
     };
 
     match res {
@@ -133,7 +163,7 @@ pub fn search_file_names(
         let name = match name.to_str() {
             Some(value) => value,
             None => {
-                error_log!(lib_error::SearchError::FailedToGetFileName);
+                error_log!(SearchError::FailedToGetFileName);
                 continue;
             }
         };
@@ -150,11 +180,12 @@ pub fn search_file_names(
     Ok(res_paths)
 }
 
-pub fn search_file_contents(
+pub fn search_file_contents<'a>(
     config: &ParseConfig,
     dir_contents: Vec<fs::DirEntry>,
-    search_strs: Vec<String>,
+    search_strs: Vec<SearchStrData<'a>>,
     file_filter: &Option<String>,
+    search_in_line: bool,
 ) -> Result<Vec<fs::DirEntry>, io::Error> {
     let dir_contents = if let Some(file_filter) = file_filter {
         dir_contents
@@ -178,7 +209,7 @@ pub fn search_file_contents(
     let result: Vec<fs::DirEntry> = thread::scope(|s| {
         chunks
             .into_iter()
-            .map(|chunk| s.spawn(|| search_chunk(chunk, &search_strs)))
+            .map(|chunk| s.spawn(|| search_chunk(chunk, &search_strs, search_in_line)))
             .collect::<Vec<_>>()
             .into_iter()
             .flat_map(|handle| handle.join().unwrap())
@@ -205,7 +236,11 @@ fn to_owned_chunks<T>(items: Vec<T>, chunk_size: NonZero<usize>) -> Vec<Vec<T>> 
     res
 }
 
-pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_strs: &Vec<String>) -> Vec<fs::DirEntry> {
+pub fn search_chunk<'a>(
+    chunk: Vec<fs::DirEntry>,
+    search_strs: &Vec<SearchStrData<'a>>,
+    search_in_line: bool,
+) -> Vec<fs::DirEntry> {
     let mut res_paths: Vec<fs::DirEntry> = vec![];
     let mut buf = String::new();
 
@@ -227,9 +262,26 @@ pub fn search_chunk(chunk: Vec<fs::DirEntry>, search_strs: &Vec<String>) -> Vec<
             }
         };
         let file_data = buf[0..bytes].to_ascii_lowercase();
-        let contains = search_strs
-            .iter()
-            .all(|item| file_data.contains(&item.to_ascii_lowercase()));
+        let contains = search_strs.iter().all(|item| {
+            if search_in_line
+                && let Some(pre_sentinel_end) = item.prefix_end_index
+                && pre_sentinel_end > 0
+            {
+                let pre_search_sentinel_str = &item.replaced_str[0..pre_sentinel_end];
+                file_data
+                    .find(pre_search_sentinel_str)
+                    .map(|prefix_index| {
+                        let end = file_data[prefix_index..]
+                            .find("\n")
+                            .map(|found_index| found_index + prefix_index)
+                            .unwrap_or(file_data.len());
+                        file_data[prefix_index..end].contains(&item.search_str.to_ascii_lowercase())
+                    })
+                    .unwrap_or(false)
+            } else {
+                file_data.contains(&item.replaced_str.to_ascii_lowercase())
+            }
+        });
         if contains {
             res_paths.push(dir_entry);
         }
