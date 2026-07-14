@@ -1,10 +1,11 @@
 mod lib_error;
+mod search;
 mod utils;
 
+pub use search::search_with_config;
 pub use utils::LastRunInfo;
 pub use utils::ParseConfig;
 pub use utils::SearchContents;
-pub use utils::search_with_config;
 
 #[cfg(test)]
 mod tests {
