@@ -18,6 +18,17 @@ pub struct ParseConfig {
     pub parallel_preference: Option<num::NonZeroUsize>,
 }
 
+impl Default for ParseConfig {
+    fn default() -> Self {
+        Self {
+            search_dirs: Default::default(),
+            search_strs: Default::default(),
+            search_contents: SearchContents::FileName(false),
+            parallel_preference: Default::default(),
+        }
+    }
+}
+
 impl ParseConfig {
     pub fn try_new(
         search_dirs: Vec<String>,
