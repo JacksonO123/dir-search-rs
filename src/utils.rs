@@ -11,6 +11,7 @@ macro_rules! error_log {
     };
 }
 
+#[derive(Debug)]
 pub struct ParseConfig {
     pub search_dirs: Vec<String>,
     pub search_strs: Vec<String>,
@@ -56,6 +57,7 @@ impl ParseConfig {
     }
 }
 
+#[derive(Debug)]
 pub enum SearchContents {
     FileName(bool),
     /// file name filter (contains), search in line
